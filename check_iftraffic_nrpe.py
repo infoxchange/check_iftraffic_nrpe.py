@@ -248,10 +248,7 @@ def calc_diff(value1, uptime1, value2, uptime2):
 
 
 include_perf_limits=1
-def get_perfdata(label, value, warn_level, crit_level, min_level, max_level):
-    global include_perf_limits
-    if include_perf_limits == 1:
-        include_perf_limits=0
+
 class NagiosService(object):
     """Defines a Nagios service with a Perfdata output
     """
