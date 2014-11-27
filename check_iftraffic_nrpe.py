@@ -33,7 +33,16 @@ import socket
 import struct
 import sys
 import time
-import argparse
+if sys.hexversion >= 0x2070000:
+    import argparse
+else:
+    class Dummy_argparse:
+         warning=100
+         critical=100
+         exclude = [ 'lo' ]
+         excludere = []
+         interfaces = []
+         linktype = []
 
 __version__ = '0.10'
 __author__ = 'Samuel Krieg'
@@ -211,7 +220,10 @@ def uptime():
 
 def max_counter():
     """Define the maximum allowed value by the system"""
-    return sys.maxsize * 2 + 1
+    if not hasattr( sys, 'maxsize' ):
+        return 2 ** 32 - 1
+    else:
+        return sys.maxsize * 2 + 1
 
 
 def calc_diff(value1, uptime1, value2, uptime2):
@@ -235,6 +247,11 @@ def calc_diff(value1, uptime1, value2, uptime2):
         return value2 - value1
 
 
+include_perf_limits=1
+def get_perfdata(label, value, warn_level, crit_level, min_level, max_level):
+    global include_perf_limits
+    if include_perf_limits == 1:
+        include_perf_limits=0
 class NagiosService(object):
     """Defines a Nagios service with a Perfdata output
     """
@@ -248,7 +265,10 @@ class NagiosService(object):
 
     def __str__(self):
         """Return the perfdata string"""
-        return '%(label)s=%(value).2fc;' \
+        global include_perf_limits
+        if include_perf_limits == 1:
+            include_perf_limits=0
+            return '%(label)s=%(value).0fc;' \
                '%(warn_level)s;' \
                '%(crit_level)s;' \
                '%(min_level)s;' \
@@ -259,6 +279,8 @@ class NagiosService(object):
                 'crit_level': self.crit_level,
                 'min_level': self.min_level,
                 'max_level': self.max_level}
+        else:
+            return ("%(label)s=%(value).0fc;" % {'label': self.label, 'value': self.value} + ';;0;' )
 
     def status(self, value):
         """Returns the string defining the Nagios status of the value"""
@@ -466,13 +488,21 @@ def main(default_values):
     # previous data
     if_data0 = None
     # The temporary file where data will be stored between to metrics
-    args = parse_arguments(default_values)
+    if sys.hexversion >= 0x2070000:
+        args = parse_arguments(default_values)
+    else:
+        args = Dummy_argparse
+        args.bandwidth = default_values['bandwidth']
+        args.unit = default_values['unit']
+        args.data_file = default_values['data_file']
 
     # this is a list of problems
     problems = []
     ifdetect = InterfaceDetection()
 
     nagios_result = NagiosResult("Traffic %s" % args.unit)
+    if sys.hexversion < 0x2070000:
+        nagios_result.messages.append('python < 2.7, args ignored')
     #
     # Read current data
     #
@@ -545,7 +575,8 @@ def main(default_values):
     if args.interfaces:
         try:
             specify_device(args.interfaces, traffic1)
-        except DeviceError as err:
+        except DeviceError:
+            t, err = sys.exc_info()[:2]
             traffic1 = dict()
             message = str(err).replace("'", "")
             nagios_result.messages.append(message)
@@ -591,7 +622,7 @@ def main(default_values):
                 # Define service values
                 #
 
-                nagios_service.value = traffic_value
+                nagios_service.value = if_data1[counter['name']]
                 nagios_service.max_level = float(args.bandwidth)
                 # convert percent levels given by user into real values
                 nagios_service.warn_level = (float(args.warning) *
@@ -617,7 +648,7 @@ if __name__ == '__main__':
     default_values = {}
     default_values["warning"] = 85
     default_values["critical"] = 98
-    default_values["data_file"] = '/var/tmp/traffic_stats.dat'
+    default_values["data_file"] = '/var/tmp/check_iftraffic_nrpe_stats.dat'
     default_values["bandwidth"] = 1000 * 1000 * 100 / 8
     default_values["bandwidth_descr"] = "100 Mbps"
     # the traffic unit from /proc/net/dev
