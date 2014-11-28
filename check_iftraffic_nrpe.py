@@ -33,9 +33,12 @@ import socket
 import struct
 import sys
 import time
-if sys.hexversion >= 0x2070000:
+
+have_argparse=0
+try:
     import argparse
-else:
+    have_argparse=1
+except ImportError:
     class Dummy_argparse:
          warning=100
          critical=100
@@ -485,7 +488,7 @@ def main(default_values):
     # previous data
     if_data0 = None
     # The temporary file where data will be stored between to metrics
-    if sys.hexversion >= 0x2070000:
+    if have_argparse == 1:
         args = parse_arguments(default_values)
     else:
         args = Dummy_argparse
@@ -498,7 +501,7 @@ def main(default_values):
     ifdetect = InterfaceDetection()
 
     nagios_result = NagiosResult("Traffic %s" % args.unit)
-    if sys.hexversion < 0x2070000:
+    if have_argparse == 0:
         nagios_result.messages.append('python < 2.7, args ignored')
     #
     # Read current data
